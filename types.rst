@@ -1,31 +1,97 @@
-.. include:: glossaries.rst
-.. index:: type
+contract ERC20Interface {
 
-.. _types:
+    string public constant name = "SL";
+    string public constant symbol = "Panda";
+    uint8 public constant decimals = 18;  // 18 is the most common number of decimal places
 
-*****
-类型
-*****
+    function totalSupply(20000000) public constant returns (uint);
+    function balanceOf(address tokenOwner) public constant returns (uint balance);
+    function allowance(address tokenOwner, address spender) public constant returns (uint remaining);
+    function transfer(address to, uint tokens) public returns (bool success);
+    function approve(address spender, uint tokens) public returns (bool success);
+    function transferFrom(address from, address to, uint tokens) public returns (bool success);
 
-Solidity 是一种静态类型语言，这意味着每个变量（状态变量和局部变量）都需要在编译时指定变量的类型。
+    event Transfer(address indexed from, address indexed to, uint tokens);
+    event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
+}
+pragma solidity ^0.4.16;
 
-Solidity 提供了几种基本类型，并且基本类型可以用来组合出复杂类型。
+interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) public; }
 
-除此之外，类型之间可以在包含运算符号的表达式中进行交互。
-关于各种运算符号，可以参考 :ref:`order` 。
+contract TokenERC20 {
+    string public name;
+    string public symbol;
+    uint8 public decimals = 18;  // 18 是建议的默认值
+    uint256 public totalSupply;
+
+    mapping (address => uint256) public balanceOf;  //
+    mapping (address => mapping (address => uint256)) public allowance;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    event Burn(address indexed from, uint256 value);
 
 
-“undefined”或“null”值的概念在Solidity中不存在，但是新声明的变量总是有一个 :ref:`默认值 <default-value>` ，具体的默认值跟类型相关。
-要处理任何意外的值，应该使用 :ref:`错误处理 <assert-and-require>` 来恢复整个交易，或者返回一个带有第二个 ``bool`` 值的元组表示成功。
+    function TokenERC20(uint256 initialSupply, string tokenName, string tokenSymbol) public {
+        totalSupply = initialSupply * 10 ** uint256(decimals);
+        balanceOf[msg.sender] = totalSupply;
+        name = tokenName;
+        symbol = tokenSymbol;
+    }
 
 
-.. include:: types/value-types.rst
+    function _transfer(address _from, address _to, uint _value) internal {
+        require(_to != 0x0);
+        require(balanceOf[_from] >= _value);
+        require(balanceOf[_to] + _value > balanceOf[_to]);
+        uint previousBalances = balanceOf[_from] + balanceOf[_to];
+        balanceOf[_from] -= _value;
+        balanceOf[_to] += _value;
+        Transfer(_from, _to, _value);
+        assert(balanceOf[_from] + balanceOf[_to] == previousBalances);
+    }
 
-.. include:: types/reference-types.rst
+    function transfer(address _to, uint256 _value) public returns (bool) {
+        _transfer(msg.sender, _to, _value);
+        return true;
+    }
 
-.. include:: types/mapping-types.rst
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+        require(_value <= allowance[_from][msg.sender]);     // Check allowance
+        allowance[_from][msg.sender] -= _value;
+        _transfer(_from, _to, _value);
+        return true;
+    }
 
-.. include:: types/operators.rst
+    function approve(address _spender, uint256 _value) public
+        returns (bool success) {
+        allowance[msg.sender][_spender] = _value;
+        return true;
+    }
 
-.. include:: types/conversion.rst
+    function approveAndCall(address _spender, uint256 _value, bytes _extraData) public returns (bool success) {
+        tokenRecipient spender = tokenRecipient(_spender);
+        if (approve(_spender, _value)) {
+            spender.receiveApproval(msg.sender, _value, this, _extraData);
+            return true;
+        }
+    }
 
+    function burn(uint256 _value) public returns (bool success) {
+        require(balanceOf[msg.sender] >= _value);
+        balanceOf[msg.sender] -= _value;
+        totalSupply -= _value;
+        Burn(msg.sender, _value);
+        return true;
+    }
+
+    function burnFrom(address _from, uint256 _value) public returns (bool success) {
+        require(balanceOf[_from] >= _value);
+        require(_value <= allowance[_from][msg.sender]);
+        balanceOf[_from] -= _value;
+        allowance[_from][msg.sender] -= _value;
+        totalSupply -= _value;
+        Burn(_from, _value);
+        return true;
+    }
+}
